@@ -1,0 +1,146 @@
+
+
+   // ExecuteUnit.sv
+module execute #(parameter xlen = 32) (
+    input wire clk,                          // Clock signal
+    input wire reset_n,                      // Active low; synchronous reset
+    input wire [3:0] operation,              // Received from decoder
+    input wire [xlen-1:0] imm,               // Received from decoder
+    input wire use_imm,                      // Received from decoder
+    input wire [xlen-1:0] operand_a,        // rs1; Received from register file
+    input wire [xlen-1:0] operand_b,        // rs2; Received from register file
+    output reg branch_taken,                  // Sent to the fetch unit
+    output reg [xlen-1:0] result             // Sent to the memory unit and writeback
+);
+
+    always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            branch_taken <= 0;
+            result <= 0;
+        end else begin
+            case (operation)
+                4'b0000: result <= (operand_a == operand_b) ? 1 : 0; // EQ
+                4'b0001: result <= (operand_a != operand_b) ? 1 : 0; // NEQ
+                4'b0010: result <= (operand_a < operand_b) ? 1 : 0;  // LT
+                4'b0011: result <= (operand_a >= operand_b) ? 1 : 0; // GE
+                4'b0100: result <= (operand_a < operand_b) ? 1 : 0;  // LTU (unsigned)
+                4'b0101: result <= (operand_a >= operand_b) ? 1 : 0; // GEU (unsigned)
+                4'b0110: result <= operand_a + operand_b;              // ADD
+                4'b0111: result <= operand_a ^ operand_b;              // XOR
+                4'b1000: result <= operand_a | operand_b;              // OR
+                4'b1001: result <= operand_a & operand_b;              // AND
+                4'b1010: result <= operand_a << operand_b;             // SLL
+                4'b1011: result <= operand_a >>> operand_b;            // SRA
+                4'b1100: result <= operand_a >> operand_b;             // SRL
+                default: result <= 0;                                  // Default case
+            endcase
+
+            // Determine if a branch should be taken (example logic)
+            branch_taken <= (operation == 4'b0000) ? 1 : 0; // Example: branch taken if operation is EQ
+        end
+    end
+
+endmodule
+
+/*tb */
+
+module execute_tb;
+
+  // ExecuteUnit_tb.sv
+//module ExecuteUnit_tb;
+
+    parameter xlen = 32;
+
+    // Inputs
+    reg clk;
+    reg reset_n;
+    reg [3:0] operation;
+    reg [xlen-1:0] imm;
+    reg use_imm;
+    reg [xlen-1:0] operand_a;
+    reg [xlen-1:0] operand_b;
+
+    // Outputs
+    wire branch_taken;
+    wire [xlen-1:0] result;
+
+    // Instantiate the ExecuteUnit
+    execute #(.xlen(xlen)) uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        .operation(operation),
+        .imm(imm),
+        .use_imm(use_imm),
+        .operand_a(operand_a),
+        .operand_b(operand_b),
+        .branch_taken(branch_taken),
+        .result(result)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 10 ns clock period
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize inputs
+        reset_n = 0;
+        operation = 0;
+        imm = 0;
+        use_imm = 0;
+        operand_a = 0;
+        operand_b = 0;
+
+        // Apply reset
+        #10;
+        reset_n = 1; // Release reset
+
+        // Test case 1: ADD operation
+        #10;
+        operation = 4'b0110; // ADD
+        operand_a = 10;
+        operand_b = 20;
+        #10; // Wait for a clock cycle
+
+        // Test case 2: EQ operation
+        #10;
+        operation = 4'b0000; // EQ
+        operand_a = 10;
+        operand_b = 10;
+        #10; // Wait for a clock cycle
+
+        // Test case 3: NEQ operation
+        #10;
+        operation = 4'b0001; // NEQ
+        operand_a = 10;
+        operand_b = 20;
+        #10; // Wait for a clock cycle
+
+        // Test case 4: SLL operation
+        #10;
+        operation = 4'b1010; // SLL
+        operand_a = 8;       // 0000 1000
+        operand_b = 1;       // Shift left by 1
+        #10; // Wait for a clock cycle
+
+        // Test case 5: SRL operation
+        #10;
+        operation = 4'b1100; // SRL
+        operand_a = 8;       // 0000 1000
+        operand_b = 1;       // Shift right by 1
+        #10; // Wait for a clock cycle
+
+        // End of simulation
+        #20;
+        $finish;
+    end
+
+    // Monitor output
+    initial begin
+        $monitor("Time: %0t | Operation: %b | Operand A: %d | Operand B: %d | Result: %d | Branch Taken: %b", 
+                 $time, operation, operand_a, operand_b, result, branch_taken);
+    end
+
+endmodule
