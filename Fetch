@@ -1,1 +1,112 @@
 
+module fetch_unit #(
+    parameter int xlen = 32
+)(
+    input logic clk,                      
+    input logic reset_n,                  
+    input logic [xlen-1:0] next_instruction, 
+    input logic branch_taken,             
+    input logic [xlen-1:0] branch_pc,     
+    input logic [xlen-1:0] offset,        // New offset input
+
+    output logic [xlen-1:0] current_instruction, 
+    output logic [xlen-1:0] next_pc,       
+    output logic [xlen-1:0] current_pc     
+);
+
+    logic [xlen-1:0] pc_reg;
+
+    always_ff @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            pc_reg <= '0;  // Reset PC to 0
+        end else if (branch_taken) begin
+            pc_reg <= branch_pc + offset;  // Use branch_pc and offset
+        end else begin
+            pc_reg <= pc_reg + 4;  // Increment PC by 4 for next instruction
+        end
+    end
+
+    assign current_pc = pc_reg;                
+    assign next_pc = pc_reg + 4;               
+    assign current_instruction = next_instruction; 
+
+endmodule
+
+
+
+/* tb file */
+
+module tb;
+
+    // Parameters
+    parameter int xlen = 32;
+
+    // Signals
+    logic clk;
+    logic reset_n;
+    logic [xlen-1:0] next_instruction;
+    logic branch_taken;
+    logic [xlen-1:0] branch_pc;
+    logic [xlen-1:0] offset;
+
+    logic [xlen-1:0] current_instruction;
+    logic [xlen-1:0] next_pc;
+    logic [xlen-1:0] current_pc;
+
+    // Instantiate the fetch_unit
+    fetch_unit #(.xlen(xlen)) uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        .next_instruction(next_instruction),
+        .branch_taken(branch_taken),
+        .branch_pc(branch_pc),
+        .offset(offset),
+        .current_instruction(current_instruction),
+        .next_pc(next_pc),
+        .current_pc(current_pc)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 10 time units clock period
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize signals
+        reset_n = 0;  // Active low reset
+        next_instruction = 32'h00000000; // Dummy instruction
+        branch_taken = 0;
+        branch_pc = 32'h00000000;
+        offset = 32'd0;
+
+        // Reset the unit
+        #10;
+        reset_n = 1; // Release reset
+        #10;
+
+        // Test normal fetching
+        next_instruction = 32'h12345678; // Dummy instruction
+        #10;
+        $display("Current PC: %h, Next PC: %h, Current Instruction: %h", current_pc, next_pc, current_instruction);
+
+        // Test branch taken
+        branch_taken = 1;
+        branch_pc = 32'h0000000C; // Target address
+        offset = 32'd4; // Offset for testing
+        #10;
+        $display("Branch taken! Current PC: %h, Next PC: %h, Current Instruction: %h", current_pc, next_pc, current_instruction);
+
+        // Test branch not taken
+        branch_taken = 0;
+        #10;
+        $display("Branch not taken! Current PC: %h, Next PC: %h, Current Instruction: %h", current_pc, next_pc, current_instruction);
+
+        // Finish the simulation
+        #10;
+        $finish;
+    end
+
+endmodule
+
