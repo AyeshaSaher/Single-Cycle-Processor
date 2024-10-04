@@ -1,0 +1,127 @@
+
+typedef enum logic [3:0] {
+    EQ  = 4'b0000,
+    NEQ = 4'b0001,
+    LT  = 4'b0010,
+    GE  = 4'b0011,
+    LTU = 4'b0100,
+    GEU = 4'b0101,
+    ADD = 4'b0110,
+    XOR = 4'b0111,
+    OR  = 4'b1000,
+    AND = 4'b1001,
+    SLL = 4'b1010,
+    SRA = 4'b1011,
+    SRL = 4'b1100
+} inst_type;
+
+module decode #(parameter xlen = 32) (
+    input wire clk,                          // Clock signal
+    input wire reset_n,                      // Active low; synchronous reset
+    input wire [xlen-1:0] current_instruction, // Received from Fetch unit
+    input wire [xlen-1:0] current_pc,       // Received from Fetch unit
+    output reg [3:0] operation,              // Sent to the Execute unit
+    output reg [$clog2(xlen)-1:0] src1_addr, // Sent to Register file
+    output reg [$clog2(xlen)-1:0] src2_addr, // Sent to Register file
+    output reg [$clog2(xlen)-1:0] dest_addr, // Sent to Register file
+    output reg [xlen-1:0] imm,               // Sent to the Execute unit
+    output reg use_imm,                      // Sent to the Execute unit
+    output reg is_load_store                 // Sent to memory and writeback unit
+);
+
+    always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            // Initialize all signals to known values when reset is active
+            operation <= 4'b0000;
+            src1_addr <= 0;
+            src2_addr <= 0;
+            dest_addr <= 0;
+            imm <= 0;
+            use_imm <= 0;
+            is_load_store <= 0;
+        end else begin
+            // Decode the instruction based on your instruction set
+            operation <= current_instruction[31:28];  // Example: top 4 bits for operation
+            src1_addr <= current_instruction[27:20];  // Source 1 address
+            src2_addr <= current_instruction[19:12];  // Source 2 address
+            dest_addr <= current_instruction[11:4];   // Destination address
+            imm <= {{20{current_instruction[31]}}, current_instruction[31:20]}; // Sign-extend immediate
+
+            // Conditions for use_imm and is_load_store signals
+            use_imm <= (operation == ADD || operation == XOR || operation == OR || operation == AND); // Example condition
+            is_load_store <= (operation == EQ || operation == NEQ || operation == LT);  // Example condition
+        end
+    end
+
+endmodule
+
+/*tb file */
+
+
+module decode_tb();
+
+    // Testbench signals
+    reg clk;
+    reg reset_n;
+    reg [31:0] current_instruction;
+    reg [31:0] current_pc;
+    wire [3:0] operation;
+    wire [4:0] src1_addr;
+    wire [4:0] src2_addr;
+    wire [4:0] dest_addr;
+    wire [31:0] imm;
+    wire use_imm;
+    wire is_load_store;
+
+    // Instantiate the Decode Unit
+    decode decode_inst (
+        .clk(clk),
+        .reset_n(reset_n),
+        .current_instruction(current_instruction),
+        .current_pc(current_pc),
+        .operation(operation),
+        .src1_addr(src1_addr),
+        .src2_addr(src2_addr),
+        .dest_addr(dest_addr),
+        .imm(imm),
+        .use_imm(use_imm),
+        .is_load_store(is_load_store)
+    );
+
+    // Clock generation
+    always #5 clk = ~clk;  // 10ns clock period
+
+    // Testbench procedure
+    initial begin
+        // Initialize signals
+        clk = 0;
+        reset_n = 0;
+        current_instruction = 32'h00000000;
+        current_pc = 32'h00000000;
+
+        // Apply reset
+        #10 reset_n = 1;  // Deassert reset
+
+        // Test Case 1: Load instruction
+        current_instruction = 32'h12345678;  // Example instruction
+        #10;
+
+        // Test Case 2: Another instruction
+        current_instruction = 32'h9ABCDEF0;
+        #10;
+
+        // Test Case 3: Yet another instruction
+        current_instruction = 32'h11223344;
+        #10;
+
+        // Finish simulation
+        $finish;
+    end
+
+    // Monitor outputs
+    initial begin
+        $monitor("Time=%0t | clk=%b | reset_n=%b | operation=%b | src1_addr=%d | src2_addr=%d | dest_addr=%d | imm=%h | use_imm=%b | is_load_store=%b",
+                 $time, clk, reset_n, operation, src1_addr, src2_addr, dest_addr, imm, use_imm, is_load_store);
+    end
+
+endmodule
