@@ -1,0 +1,125 @@
+
+
+
+  // Memory.sv
+module memory #(parameter DATA_WIDTH = 32, parameter ADDR_WIDTH = 10) (
+    input wire clk,                             // Clock signal
+    input wire reset_n,                         // Active low reset
+    input wire [ADDR_WIDTH-1:0] address,       // Address for read/write
+    input wire [DATA_WIDTH-1:0] write_data,    // Data to write
+    input wire we,                               // Write enable
+    output reg [DATA_WIDTH-1:0] read_data       // Data to read
+);
+
+    // Memory array
+    reg [DATA_WIDTH-1:0] mem [(1<<ADDR_WIDTH)-1:0];
+
+    // Always block for synchronous write and asynchronous read
+    always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            // Optionally clear memory on reset
+            integer i;
+            for (i = 0; i < (1<<ADDR_WIDTH); i = i + 1) begin
+                mem[i] <= 0;
+            end
+            read_data <= 0; // Clear read data on reset
+        end else begin
+            if (we) begin
+                mem[address] <= write_data; // Write data to memory
+            end
+            read_data <= mem[address]; // Read data from memory
+        end
+    end
+
+endmodule
+/* tb */
+
+module memory_tb;
+
+ // Memory_tb.sv
+
+    parameter DATA_WIDTH = 32;
+    parameter ADDR_WIDTH = 10;
+    parameter MEM_SIZE = (1 << ADDR_WIDTH); // 2^ADDR_WIDTH
+
+    // Inputs
+    reg clk;
+    reg reset_n;
+    reg [ADDR_WIDTH-1:0] address;            // Address for read/write
+    reg [DATA_WIDTH-1:0] write_data;         // Data to write
+    reg we;                                   // Write enable
+
+    // Outputs
+    wire [DATA_WIDTH-1:0] read_data;         // Data to read
+
+    // Instantiate the Memory
+    memory #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        .address(address),
+        .write_data(write_data),
+        .we(we),
+        .read_data(read_data)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 10 ns clock period
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize inputs
+        reset_n = 0;          // Assert reset
+        we = 0;
+        address = 0;
+        write_data = 0;
+
+        // Apply reset
+        #10;
+        reset_n = 1; // Release reset
+
+        // Test Case 1: Write data to address 0
+        #10;
+        address = 10'b0000000000; // Address 0
+        write_data = 32'hDEADBEEF; // Data to write
+        we = 1; // Enable write
+        #10;
+        we = 0; // Disable write
+
+        // Test Case 2: Read from address 0
+        #10;
+        address = 10'b0000000000; // Address 0
+        #10; // Wait for read data
+
+        // Test Case 3: Write data to address 1
+        #10;
+        address = 10'b0000000001; // Address 1
+        write_data = 32'hBAADF00D; // Data to write
+        we = 1; // Enable write
+        #10;
+        we = 0; // Disable write
+
+        // Test Case 4: Read from address 1
+        #10;
+        address = 10'b0000000001; // Address 1
+        #10; // Wait for read data
+
+        // Test Case 5: Read from address 0 again
+        #10;
+        address = 10'b0000000000; // Address 0
+        #10; // Wait for read data
+
+        // End of simulation
+        #20;
+        $finish;
+    end
+
+    // Monitor output
+    initial begin
+        $monitor("Time: %0t | Address: %b | Write Data: %h | Write Enable: %b | Read Data: %h", 
+                 $time, address, write_data, we, read_data);
+    end
+
+endmodule
