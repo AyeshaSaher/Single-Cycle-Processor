@@ -1,0 +1,130 @@
+
+module register (
+    input wire clk,
+    input wire reset_n,
+    input wire [4:0] src1_addr,
+    input wire [4:0] src2_addr,
+    input wire [4:0] dest_addr,
+    input wire [31:0] write_data,
+    input wire wr_en,
+    output reg [31:0] operand_a,
+    output reg [31:0] operand_b
+);
+    reg [31:0] reg_file[31:0];
+
+    always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            for (integer i = 0; i < 32; i++) begin
+                reg_file[i] <= 0;
+            end
+        end else begin
+            if (wr_en && dest_addr != 0) begin
+                reg_file[dest_addr] <= write_data;
+            end
+        end
+    end
+
+    always @(*) begin
+        operand_a = (src1_addr == 0) ? 32'b0 : reg_file[src1_addr];
+        operand_b = (src2_addr == 0) ? 32'b0 : reg_file[src2_addr];
+    end
+endmodule
+
+/* tb */
+
+module register_tb;
+
+    parameter xlen = 32;
+
+    // Inputs
+    reg clk;
+    reg reset_n;
+    reg [4:0] src1_addr;    // 5 bits for 32 registers
+    reg [4:0] src2_addr;    // 5 bits for 32 registers
+    reg [4:0] dest_addr;     // 5 bits for 32 registers
+    reg [xlen-1:0] write_data; // 32-bit write data
+    reg wr_en;              // Write enable signal
+
+    // Outputs
+    wire [xlen-1:0] operand_a; // Output for rs1
+    wire [xlen-1:0] operand_b; // Output for rs2
+
+    // Instantiate the SimpleRegisterFile
+    register uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        .src1_addr(src1_addr),
+        .src2_addr(src2_addr),
+        .dest_addr(dest_addr),
+        .write_data(write_data),
+        .wr_en(wr_en),
+        .operand_a(operand_a),
+        .operand_b(operand_b)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 10 ns clock period
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize inputs
+        reset_n = 0;          // Assert reset
+        wr_en = 0;
+        write_data = 0;
+        src1_addr = 0;
+        src2_addr = 0;
+        dest_addr = 0;
+
+        // Apply reset
+        #10;
+        reset_n = 1; // Release reset
+
+        // Test Case 1: Write to register 1
+        #10;
+        dest_addr = 5'b00001; // Register 1
+        write_data = 32'hAAAA_AAAA; // Write data
+        wr_en = 1; // Enable write
+        #10;
+        wr_en = 0; // Disable write
+
+        // Test Case 2: Read from register 1
+        #10;
+        src1_addr = 5'b00001; // Read from register 1
+        src2_addr = 5'b00000; // Read from register 0 (should be 0)
+        #10;
+
+        // Test Case 3: Write to register 2
+        #10;
+        dest_addr = 5'b00010; // Register 2
+        write_data = 32'h5555_5555; // Write data
+        wr_en = 1; // Enable write
+        #10;
+        wr_en = 0; // Disable write
+
+        // Test Case 4: Read from register 2
+        #10;
+        src1_addr = 5'b00010; // Read from register 2
+        src2_addr = 5'b00001; // Read from register 1
+        #10;
+
+        // Test Case 5: Read from register 0
+        #10;
+        src1_addr = 5'b00000; // Read from register 0 (should be 0)
+        src2_addr = 5'b00001; // Read from register 1
+        #10;
+
+        // End of simulation
+        #20;
+        $finish;
+    end
+
+    // Monitor output
+    initial begin
+        $monitor("Time: %0t | Src1 Addr: %d | Src2 Addr: %d | Dest Addr: %d | Operand A: %h | Operand B: %h | Write Data: %h | Write Enable: %b", 
+                 $time, src1_addr, src2_addr, dest_addr, operand_a, operand_b, write_data, wr_en);
+    end
+
+endmodule
