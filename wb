@@ -1,0 +1,109 @@
+module wb #(parameter xlen = 32) (
+    input wire clk,                             // Clock signal
+    input wire reset_n,                         // Active low reset
+    input wire [xlen-1:0] result,               // Result from the execution unit
+    input wire [4:0] dest_addr,                 // Destination address for write-back
+    input wire [xlen-1:0] write_data,           // Data received from the Write Back unit
+    input wire wr_en,                           // Write enable signal received from the Write Back unit
+    output reg [xlen-1:0] final_write_data,     // Final data to be written (from WB)
+    output reg [4:0] write_addr                 // Address to write to
+);
+
+    always @(posedge clk or negedge reset_n) begin
+        if (!reset_n) begin
+            final_write_data <= 0;
+            write_addr <= 0;
+        end else begin
+            if (wr_en) begin
+                // Write the write_data to final_write_data and the destination address
+                final_write_data <= write_data; 
+                write_addr <= dest_addr;
+            end else begin
+                // When not writing, use the result from the execute stage
+                final_write_data <= result;     
+            end
+        end
+    end
+
+endmodule
+
+
+/* tb*/
+
+module wb_tb;
+
+    parameter xlen = 32;
+
+    // Inputs
+    reg clk;
+    reg reset_n;
+    reg [xlen-1:0] result;         // Result from the execution unit
+    reg [4:0] dest_addr;           // Destination address for write-back
+    reg [xlen-1:0] write_data;     // Data received from the Write Back unit
+    reg wr_en;                     // Write enable signal
+
+    // Outputs
+    wire [xlen-1:0] final_write_data; // Data to be written (from WB)
+    wire [4:0] write_addr;            // Address to write to
+
+    // Instantiate the WriteBack module
+    wb #(.xlen(xlen)) uut (
+        .clk(clk),
+        .reset_n(reset_n),
+        .result(result),
+        .dest_addr(dest_addr),
+        .write_data(write_data),
+        .wr_en(wr_en),
+        .final_write_data(final_write_data),
+        .write_addr(write_addr)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; // 10 ns clock period
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize inputs
+        reset_n = 0;          // Assert reset
+        wr_en = 0;
+        result = 32'h12345678; // Some initial result value
+        dest_addr = 0;
+        write_data = 0;
+
+        // Apply reset
+        #10;
+        reset_n = 1; // Release reset
+
+        // Test Case 1: Write back data to register 1
+        #10;
+        dest_addr = 5'b00001;         // Destination register 1
+        write_data = 32'hDEADBEEF;    // Data to write back
+        wr_en = 1;                    // Enable write-back
+        #10;
+        wr_en = 0;                    // Disable write-back
+
+        // Test Case 2: Write back another result to register 2
+        #10;
+        dest_addr = 5'b00010;         // Destination register 2
+        write_data = 32'hBAADF00D;    // Another data to write back
+        wr_en = 1;                    // Enable write-back
+        #10;
+        wr_en = 0;                    // Disable write-back
+
+        // End of simulation
+        #20;
+        $finish;
+    end
+
+    // Monitor output
+    initial begin
+        $monitor("Time: %0t | Dest Addr: %d | Write Data: %h | Final Write Data: %h | Write Enable: %b", 
+                 $time, dest_addr, write_data, final_write_data, wr_en);
+    end
+
+endmodule
+
+
